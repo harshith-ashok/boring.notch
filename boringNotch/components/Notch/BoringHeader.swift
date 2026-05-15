@@ -12,12 +12,20 @@ struct BoringHeader: View {
     @EnvironmentObject var vm: BoringViewModel
     @ObservedObject var batteryModel = BatteryStatusViewModel.shared
     @ObservedObject var coordinator = BoringViewCoordinator.shared
+    @ObservedObject var voiceAssistantState = VoiceAssistantStateManager.shared
     @StateObject var tvm = ShelfStateViewModel.shared
+
     var body: some View {
         HStack(spacing: 0) {
             HStack {
+                if vm.notchState == .open {
+                    ListeningStatusPill(isListening: voiceAssistantState.isListening)
+                        .padding(.leading, 10)
+                }
+
                 if (!tvm.isEmpty || coordinator.alwaysShowTabs) && Defaults[.boringShelf] {
                     TabSelectionView()
+                        .padding(.leading, 8)
                 } else if vm.notchState == .open {
                     EmptyView()
                 }
@@ -109,6 +117,27 @@ struct BoringHeader: View {
         default:
             return false
         }
+    }
+}
+
+private struct ListeningStatusPill: View {
+    let isListening: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: isListening ? "waveform.circle.fill" : "waveform.circle")
+                .font(.system(size: 12, weight: .semibold))
+
+            Text(isListening ? "Listening..." : "Not Listening")
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+        }
+        .foregroundStyle(isListening ? .white : .gray)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(Color.white.opacity(isListening ? 0.16 : 0.08))
+        )
     }
 }
 

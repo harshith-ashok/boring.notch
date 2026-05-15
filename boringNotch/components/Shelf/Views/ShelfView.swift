@@ -1,115 +1,176 @@
 //
-//  ShelfItemView.swift
+//  ShelfView.swift
 //  boringNotch
 //
 //  Created by Alexander on 2025-09-24.
 //
 
 import SwiftUI
-import AppKit
+
+@MainActor
+final class DeviceShelfStateManager: ObservableObject {
+    static let shared = DeviceShelfStateManager()
+
+    @Published private(set) var devices: [DeviceShelfEntry] = []
+
+    private let stateFileURL = URL(fileURLWithPath: "/Users/harshith/.device_state.json")
+    private var pollTimer: Timer?
+
+    private init() {
+        refreshState()
+        startPolling()
+    }
+
+    deinit {
+        pollTimer?.invalidate()
+    }
+
+    private func startPolling() {
+        let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refreshState()
+            }
+        }
+
+        timer.tolerance = 0.2
+        RunLoop.main.add(timer, forMode: .common)
+        pollTimer = timer
+    }
+
+    func refreshState() {
+        guard
+            let data = try? Data(contentsOf: stateFileURL),
+            let payload = try? JSONDecoder().decode(DeviceShelfPayload.self, from: data)
+        else {
+            devices = []
+            return
+        }
+
+        let orderedNames = ["Main Light", "Ceiling Fan", "Accent Light"]
+        devices = orderedNames.compactMap { name in
+            guard let device = payload.devices[name] else { return nil }
+
+            switch name {
+            case "Main Light":
+                return DeviceShelfEntry(
+                    name: name,
+                    icon: "lightbulb.fill",
+                    isActive: device.status == 1,
+                    accentColor: device.status == 1 ? .yellow : .gray,
+                    statusText: device.status == 1 ? "On" : "Off",
+                    detailText: nil
+                )
+            case "Ceiling Fan":
+                return DeviceShelfEntry(
+                    name: name,
+                    icon: "fanblades.fill",
+                    isActive: device.status == 1,
+                    accentColor: device.status == 1 ? .cyan : .gray,
+                    statusText: device.status == 1 ? "On" : "Off",
+                    detailText: device.status == 1 ? "Speed \(device.value ?? 0)" : nil
+                )
+            case "Accent Light":
+                return DeviceShelfEntry(
+                    name: name,
+                    icon: "lamp.floor.fill",
+                    isActive: device.status == 1,
+                    accentColor: device.status == 1 ? .green : .gray,
+                    statusText: device.status == 1 ? "On" : "Off",
+                    detailText: device.status == 1 ? device.color?.capitalized : nil
+                )
+            default:
+                return nil
+            }
+        }
+    }
+}
+
+private struct DeviceShelfPayload: Decodable {
+    let devices: [String: DeviceShelfState]
+}
+
+private struct DeviceShelfState: Decodable {
+    let status: Int
+    let value: Int?
+    let color: String?
+}
+
+struct DeviceShelfEntry: Identifiable {
+    let id = UUID()
+    let name: String
+    let icon: String
+    let isActive: Bool
+    let accentColor: Color
+    let statusText: String
+    let detailText: String?
+}
 
 struct ShelfView: View {
-    @EnvironmentObject var vm: BoringViewModel
-    @StateObject var tvm = ShelfStateViewModel.shared
-    @StateObject var selection = ShelfSelectionModel.shared
-    @StateObject private var quickLookService = QuickLookService()
-    private let spacing: CGFloat = 8
+    @StateObject private var deviceState = DeviceShelfStateManager.shared
 
     var body: some View {
-        HStack(spacing: 12) {
-            FileShareView()
-                .aspectRatio(1, contentMode: .fit)
-                .environmentObject(vm)
-            panel
-                .onDrop(of: [.fileURL, .url, .utf8PlainText, .plainText, .data], isTargeted: $vm.dragDetectorTargeting) { providers in
-                    handleDrop(providers: providers)
-                }
-        }
-        // Bind Quick Look to shelf selection
-        .onChange(of: selection.selectedIDs) {
-            updateQuickLookSelection()
-        }
-        .quickLookPresenter(using: quickLookService)
-    }
-    
-    private func handleDrop(providers: [NSItemProvider]) -> Bool {
-        guard !selection.isDragging else { return false }
-        vm.dropEvent = true
-        ShelfStateViewModel.shared.load(providers)
-        return true
-    }
-    
-    private func updateQuickLookSelection() {
-        guard quickLookService.isQuickLookOpen && !selection.selectedIDs.isEmpty else { return }
-        
-        let selectedItems = selection.selectedItems(in: tvm.items)
-        let urls: [URL] = selectedItems.compactMap { item in
-            if let fileURL = item.fileURL {
-                return fileURL
-            }
-            if case .link(let url) = item.kind {
-                return url
-            }
-            return nil
-        }
-        
-        if !urls.isEmpty {
-            quickLookService.updateSelection(urls: urls)
-        }
-    }
-
-    var panel: some View {
-        RoundedRectangle(cornerRadius: 16)
-            .stroke(
-                vm.dragDetectorTargeting
-                    ? Color.accentColor.opacity(0.9)
-                    : Color.white.opacity(0.1),
-                style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [10])
-            )
+        RoundedRectangle(cornerRadius: 18)
+            .fill(Color.white.opacity(0.04))
             .overlay {
-                content
-                    .padding()
+                shelfContent
+                    .padding(18)
             }
-            .transaction { transaction in
-                transaction.animation = vm.animation
-            }
-            .contentShape(Rectangle())
-            .onTapGesture { selection.clear() }
     }
 
-    var content: some View {
-        Group {
-            if tvm.isEmpty {
-                VStack(spacing: 10) {
-                    Image(systemName: "tray.and.arrow.down")
-                        .symbolVariant(.fill)
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.white, .gray)
-                        .imageScale(.large)
-                    
-                    Text("Drop files here")
-                        .foregroundStyle(.gray)
-                        .font(.system(.title3, design: .rounded))
-                        .fontWeight(.medium)
-                }
-            } else {
-                ScrollView(.horizontal) {
-                    HStack(spacing: spacing) {
-                        ForEach(tvm.items) { item in
-                            ShelfItemView(item: item)
-                                .environmentObject(quickLookService)
-                        }
-                    }
-                }
-                .padding(-spacing)
-                .scrollIndicators(.never)
-                .onDrop(of: [.fileURL, .url, .utf8PlainText, .plainText, .data], isTargeted: $vm.dragDetectorTargeting) { providers in
-                    handleDrop(providers: providers)
+    @ViewBuilder
+    private var shelfContent: some View {
+        if deviceState.devices.isEmpty {
+            VStack(spacing: 10) {
+                Image(systemName: "switch.2")
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(.white, .gray)
+                    .font(.system(size: 28))
+
+                Text("No device state available")
+                    .foregroundStyle(.gray)
+                    .font(.system(.title3, design: .rounded))
+                    .fontWeight(.medium)
+            }
+        } else {
+            HStack(spacing: 12) {
+                ForEach(deviceState.devices) { device in
+                    DeviceShelfCard(device: device)
                 }
             }
         }
-        .onAppear {
-            ShelfStateViewModel.shared.cleanupInvalidItems()
+    }
+}
+
+private struct DeviceShelfCard: View {
+    let device: DeviceShelfEntry
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: device.icon)
+                    .foregroundStyle(device.accentColor)
+                    .font(.system(size: 18, weight: .semibold))
+
+                Text(device.name)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+            }
+
+            Text(device.statusText)
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundStyle(device.isActive ? .white : .gray)
+
+            Text(device.detailText ?? " ")
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundStyle(.gray)
+                .lineLimit(1)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(0.06))
+        )
     }
 }

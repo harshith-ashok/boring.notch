@@ -7807,6 +7807,7 @@
       }
     },
     "Drop files here" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -12009,6 +12010,9 @@
         }
       }
     },
+    "Listening..." : {
+
+    },
     "Lottie JSON URL" : {
       "localizations" : {
         "ar" : {
@@ -14709,6 +14713,9 @@
         }
       }
     },
+    "No device state available" : {
+
+    },
     "No events" : {
       "localizations" : {
         "ar" : {
@@ -15009,6 +15016,12 @@
           }
         }
       }
+    },
+    "Not listening" : {
+
+    },
+    "Not Listening" : {
+
     },
     "Not Now" : {
       "localizations" : {

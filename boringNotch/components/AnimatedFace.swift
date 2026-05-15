@@ -8,6 +8,7 @@ import SwiftUI
 
 struct MinimalFaceFeatures: View {
     @State private var isBlinking = false
+    var isListening: Bool = false
     @State var height:CGFloat = 20;
     @State var width:CGFloat = 30;
     
@@ -31,8 +32,14 @@ struct MinimalFaceFeatures: View {
                     Path { path in
                         let width = geometry.size.width
                         let height = geometry.size.height
-                        path.move(to: CGPoint(x: 0, y: height / 2))
-                        path.addQuadCurve(to: CGPoint(x: width, y: height / 2), control: CGPoint(x: width / 2, y: height))
+
+                        if isListening {
+                            path.move(to: CGPoint(x: 0, y: height / 2))
+                            path.addLine(to: CGPoint(x: width, y: height / 2))
+                        } else {
+                            path.move(to: CGPoint(x: 0, y: height / 2))
+                            path.addQuadCurve(to: CGPoint(x: width, y: height / 2), control: CGPoint(x: width / 2, y: height))
+                        }
                     }
                     .stroke(Color.white, lineWidth: 2)
                 }
@@ -40,6 +47,7 @@ struct MinimalFaceFeatures: View {
             }
         }
         .frame(width: self.width, height: self.height) // Maximum size of face
+        .animation(.smooth(duration: 0.2), value: isListening)
         .onAppear {
             startBlinking()
         }

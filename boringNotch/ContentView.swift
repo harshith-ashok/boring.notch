@@ -23,6 +23,7 @@ struct ContentView: View {
     @ObservedObject var batteryModel = BatteryStatusViewModel.shared
     @ObservedObject var brightnessManager = BrightnessManager.shared
     @ObservedObject var volumeManager = VolumeManager.shared
+    @ObservedObject var voiceAssistantState = VoiceAssistantStateManager.shared
     @State private var hoverTask: Task<Void, Never>?
     @State private var isHovering: Bool = false
     @State private var anyDropDebounceTask: Task<Void, Never>?
@@ -377,7 +378,13 @@ struct ContentView: View {
                 Rectangle()
                     .fill(.black)
                     .frame(width: vm.closedNotchSize.width - 20)
-                MinimalFaceFeatures()
+                    .overlay(alignment: .leading) {
+                        Text(voiceAssistantState.isListening ? "Listening..." : "Not listening")
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .foregroundStyle(voiceAssistantState.isListening ? .white : .gray)
+                            .padding(.leading, 14)
+                    }
+                MinimalFaceFeatures(isListening: voiceAssistantState.isListening)
             }
         }.frame(
             height: vm.effectiveClosedNotchHeight,
@@ -422,7 +429,7 @@ struct ContentView: View {
                             )
                             Spacer(minLength: vm.closedNotchSize.width)
                             // Song Artist
-                            Text(musicManager.artistName)
+                            Text(musicManager.artistName+"wasss")
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                                 .foregroundStyle(
